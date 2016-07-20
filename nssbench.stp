@@ -1,7 +1,7 @@
 #!/usr/bin/stap
 
 global strarg
-global oparg
+global strop
 
 global t_files;
 global t_sss;
@@ -9,12 +9,6 @@ global t_nss;
 
 function time() {
     return gettimeofday_us()
-}
-
-function nss_str_op(op) {
-    if (op == 0) {
-        return "getpwnam"
-    }
 }
 
 probe process("/usr/lib64/libnss_files.so.2").function("_nss_files_getpwnam_r").return {
@@ -25,13 +19,45 @@ probe process("/usr/lib64/libnss_sss.so.2").function("_nss_sss_getpwnam_r").retu
     t_sss <<< (time() - @entry(time()))
 }
 
+probe process("/usr/lib64/libnss_files.so.2").function("_nss_files_getpwuid_r").return {
+    t_files <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_sss.so.2").function("_nss_sss_getpwuid_r").return {
+    t_sss <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_files.so.2").function("_nss_files_getgrnam_r").return {
+    t_files <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_sss.so.2").function("_nss_sss_getgrnam_r").return {
+    t_sss <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_files.so.2").function("_nss_files_getgrgid_r").return {
+    t_files <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_sss.so.2").function("_nss_sss_getgrgid_r").return {
+    t_sss <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_files.so.2").function("_nss_files_initgroups_dyn").return {
+    t_files <<< (time() - @entry(time()))
+}
+
+probe process("/usr/lib64/libnss_sss.so.2").function("_nss_sss_initgroups_dyn").return {
+    t_sss <<< (time() - @entry(time()))
+}
+
 probe process("nssbench").function("nss_wrapper").return {
     t_nss <<< (time() - @entry(time()))
 }
 
 probe process("nssbench").function("nss_wrapper_loop").return {
     strarg = user_string(@entry($str_arg))
-    oparg = user_int(@entry($nb_fn))
+    strop = user_string(@entry($fn_name))
 }
 
 probe process("nssbench").begin {
@@ -42,24 +68,22 @@ probe process("nssbench").begin {
 
 probe process("nssbench").end {
     printf("nss operation %s(%s) took %d us\n",
-           nss_str_op(oparg), strarg, @sum(t_nss))
+           strop, strarg, @sum(t_nss))
 
     if (@count(t_files) > 0) {
         printf("_nss_files_%s cnt:%d avg:%d min:%d max:%d sum:%d us\n",
-               nss_str_op(oparg), @count(t_files), @avg(t_files), @min(t_files),
+               strop, @count(t_files), @avg(t_files), @min(t_files),
                @max(t_files), @sum(t_files))
     } else {
-        printf("_nss_files_%s cnt:0 avg:0 min:0 max:0 sum:0 us\n",
-               nss_str_op(oparg))
+        printf("_nss_files_%s cnt:0 avg:0 min:0 max:0 sum:0 us\n", strop)
     }
 
     if (@count(t_sss) > 0) {
         printf("_nss_sss_%s cnt:%d avg:%d min:%d max:%d sum:%d us\n",
-               nss_str_op(oparg), @count(t_sss), @avg(t_sss), @min(t_sss),
+               strop, @count(t_sss), @avg(t_sss), @min(t_sss),
                @max(t_sss), @sum(t_sss))
     } else {
-        printf("_nss_sss_%s cnt:0 avg:0 min:0 max:0 sum:0 us\n",
-               nss_str_op(oparg))
+        printf("_nss_sss_%s cnt:0 avg:0 min:0 max:0 sum:0 us\n", strop)
     }
     printf("\n")
 }
